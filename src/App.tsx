@@ -47,7 +47,13 @@ function App() {
 
     // Check existing session
     ;(async () => {
-      const res = await fetch('/api/auth/session')
+      let res;
+      try {
+        res = await fetch('/api/auth/session');
+      } catch {
+        setLoadingAuth(false);
+        return;
+      }
       if (res?.ok) {
         const json = await res.json()
         const session = (json as { data?: { session?: { user?: { id: string; email: string } } } }).data?.session
