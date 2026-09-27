@@ -1,3 +1,5 @@
+import { useState, useRef, useEffect, useCallback } from 'react';
+
 export interface RecorderViewProps {
   isRecording: boolean;
   isPaused: boolean;
@@ -14,6 +16,10 @@ export interface RecorderViewProps {
   onStopStream: () => void;
   onSaveToCloud?: () => void;
   uploading?: boolean;
+  scrollRecording?: boolean;
+  onToggleScrollRecording?: () => void;
+  quality?: string;
+  onQualityChange?: (quality: string) => void;
 }
 
 function formatTime(seconds: number): string {
@@ -38,7 +44,39 @@ export function RecorderView({
   onStopStream,
   onSaveToCloud,
   uploading,
+  scrollRecording = false,
+  onToggleScrollRecording,
+  quality = "auto",
+  onQualityChange,
 }: RecorderViewProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [showReadyToast, setShowReadyToast] = useState(false);
+  const [showScrollGuide, setShowScrollGuide] = useState(false);
+
+  useEffect(() => {
+    if (hasRecording && recordingBlob) {
+      setShowReadyToast(true);
+    }
+    if (isRecording && scrollRecording) {
+      setShowScrollGuide(true);
+    } else {
+      setShowScrollGuide(false);
+    }
+  }, [hasRecording, recordingBlob, isRecording, scrollRecording]);
+
+  const handleReplay = useCallback(() => {
+    const video = videoRef.current;
+    if (video) {
+      video.currentTime = 0;
+      video.play();
+    }
+  }, []);
+
+  const handleQualityChange = useCallback(() => {
+    const levels = ['auto', '720p', '1080p'];
+    const next = levels[(levels.indexOf(quality) + 1) % levels.length];
+    onQualityChange?.(next);
+  }, [quality, onQualityChange]);
   return (
     <div className="recorder-app">
       <header className="recorder-header">
@@ -57,6 +95,27 @@ export function RecorderView({
           Local · No uploads
         </div>
         <div className="header-actions">
+          <button
+            className={`btn btn-ghost btn-sm scroll-toggle ${scrollRecording ? 'active' : ''}`}
+            onClick={onToggleScrollRecording}
+            title="Capture du contenu scrolls (pages longues, documents)"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22V12"/>
+              <path d="M20 12l-4-4-4 4"/>
+              <path d="M4 12l4-4-4-4"/>
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+            </svg>
+            Scroll
+          </button>
+          <button className={`btn btn-ghost btn-sm quality-btn ${quality === '1080p' ? 'active' : ''}`} onClick={handleQualityChange} title="Quality: {quality}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <circle cx="12" cy="12" r="6"/>
+              <circle cx="12" cy="12" r="2"/>
+            </svg>
+            {quality === 'auto' ? 'Auto' : quality}
+          </button>
           <button className="btn btn-ghost btn-sm" onClick={onStopStream} title="Reset">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 12a9 9 0 119 9"/>
@@ -68,7 +127,7 @@ export function RecorderView({
 
       <main className="recorder-main">
       {/* Preview Area */}
-      <div className="preview-wrapper">
+      <div className={"preview-wrapper" + (isRecording ? " recording" : "")}>
         {mediaStream && (
           <video
             className="preview-video"
@@ -94,13 +153,52 @@ export function RecorderView({
           </div>
         )}
         {hasRecording && !mediaStream && (
-          <video
-            className="preview-video"
-            src={recordingBlob ? URL.createObjectURL(recordingBlob) : undefined}
-            controls
-            autoPlay
-            playsInline
-          />
+          <div className="preview-area-wrapper">
+            <div className="preview-area-player">
+              <video
+                className="preview-video preview-player"
+                src={recordingBlob ? URL.createObjectURL(recordingBlob) : undefined}
+                controls
+                autoPlay
+                playsInline
+              />
+              <div className="video-player-overlay">
+                <div className="video-player-info">
+                  <span className="video-player-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="23 7 16 12 23 17 23 7"/>
+                      <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                    Your recording is ready
+                  </span>
+                  <span className="video-player-name">{recordingBlob ? `Recording-${new Date().toISOString().slice(0,19).replace(/[-:]/g,'')}.webm` : ''}</span>
+                </div>
+                <button className="btn btn-secondary btn-sm replay-btn" onClick={handleReplay}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                  </svg>
+                  Replay
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Recording ready toast - shown when recording is complete */}
+        {showReadyToast && (
+          <div className="recording-toast">
+            <div className="recording-toast-content">
+              <div className="toast-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+                  <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+              </div>
+              <div className="toast-body">
+                <span className="toast-title">Recording ready!</span>
+                <span className="toast-sub">Your screen capture — {formatTime(elapsedTime)}</span>
+              </div>
+            </div>
+          </div>
         )}
         {isRecording && (
           <div className="recording-badge">
@@ -115,6 +213,29 @@ export function RecorderView({
           </div>
         )}
       </div>
+
+        {/* Scroll recording badge */}
+        {isRecording && scrollRecording && (
+          <div className="scroll-recording-badge">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22V12"/>
+              <path d="M20 12l-4-4-4 4"/>
+              <path d="M4 12l4-4-4-4"/>
+            </svg>
+            Scroll Recording
+          </div>
+        )}
+
+        {/* Scroll guide - shown during recording in scroll mode */}
+        {showScrollGuide && (
+          <div className="scroll-guide">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14"/>
+              <polyline points="19 12 12 19 5 12"/>
+            </svg>
+            <span>Scroll the content you want to capture — it will be recorded as you move</span>
+          </div>
+        )}
 
         {/* Timer */}
         {(isRecording || isPaused) && (

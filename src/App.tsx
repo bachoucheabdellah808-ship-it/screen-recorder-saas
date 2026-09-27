@@ -19,6 +19,7 @@ function App() {
     startRecording,
     pauseRecording,
     resumeRecording,
+    stopRecording,
     stopStream,
     downloadRecording,
   } = useScreenRecorder()
@@ -54,15 +55,20 @@ function App() {
         setLoadingAuth(false);
         return;
       }
-      if (res?.ok) {
-        const json = await res.json()
-        const session = (json as { data?: { session?: { user?: { id: string; email: string } } } }).data?.session
-        if (session?.user) {
-          setUser({ id: session.user.id, email: session.user.email! })
-          await loadCloudRecordings()
+      try {
+        if (res?.ok) {
+          const json = await res.json();
+          const session = (json as { data?: { session?: { user?: { id: string; email: string } } } }).data?.session;
+          if (session?.user) {
+            setUser({ id: session.user.id, email: session.user.email! });
+            await loadCloudRecordings();
+          }
         }
+      } catch (err) {
+        console.warn('[ScreenRecorder] Session check failed:', err);
+      } finally {
+        setLoadingAuth(false);
       }
-      setLoadingAuth(false)
     })()
   }, [])
 
@@ -95,22 +101,37 @@ function App() {
     }
   }, [user])
 
-  // Handle recording done: show save options
-  const handleRecordingDone = useCallback(() => {
-    if (!hasRecording || !recordingBlob) return
+  const [showToast, setShowToast] = useState(false)
+
+  // Show toast when recording is ready
+  useEffect(() => {
+    if (hasRecording && recordingBlob) {
+      setShowToast(true)
+    }
+  }, [hasRecording, recordingBlob])
+
+  // Handle recording done: stop the recorder and save/download
+  const handleRecordingDone = useCallback(async () => {
+    // 1. Stop the MediaRecorder — returns the blob immediately
+    const blob = stopRecording()
+    if (!blob) {
+      // Fallback: force-reset everything
+      stopStream()
+      return
+    }
+    // 2. Give React a tick for the hook's onstop to set hasRecording/recordingBlob
+    await new Promise((r) => setTimeout(r, 0))
     const name = `Recording-${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}`
-    // Try cloud save if authenticated, then fall back to local download
-    ;(async () => {
+    // 3. Try cloud save, fall back to local download
+    try {
       if (user && isSupabaseReady()) {
-        try {
-          await saveToCloud(recordingBlob, name)
-        } catch {
-          // fall through to local download
-        }
+        await saveToCloud(blob, name)
       }
-      downloadRecording()
-    })()
-  }, [hasRecording, recordingBlob, user, isSupabaseReady, saveToCloud, downloadRecording])
+    } catch {
+      // fall through to local download
+    }
+    downloadRecording()
+  }, [stopRecording, stopStream, user, isSupabaseReady, saveToCloud, downloadRecording])
 
   if (loadingAuth) {
     return (
@@ -132,13 +153,30 @@ function App() {
           <span>Screen Recorder</span>
         </div>
         <nav className="top-nav">
-          <button className={`nav-btn ${view === 'record' ? 'active' : ''}`} onClick={() => setView('record')}>
-            Record
-          </button>
           <button className={`nav-btn ${view === 'dashboard' ? 'active' : ''}`} onClick={() => setView('dashboard')}>
             Cloud ({cloudRecordings.length})
           </button>
         </nav>
+        {/* Recording controls */}
+        <div className="top-controls">
+          {isRecording && (
+            <button className="btn btn-danger btn-sm" onClick={handleRecordingDone} title="Stop recording">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="6" width="12" height="12" rx="2"/>
+              </svg>
+              Stop
+            </button>
+          )}
+          {!isRecording && hasRecording && (
+            <button className="btn btn-ghost btn-sm" onClick={stopStream} title="Discard and record again">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="23 4 23 10 17 10"/>
+                <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
+              </svg>
+              Record Again
+            </button>
+          )}
+        </div>
         <div className="top-auth">
           {user ? (
             <div className="user-chip">
@@ -188,6 +226,10 @@ function App() {
             onStopStream={stopStream}
             onSaveToCloud={recordingBlob ? () => saveToCloud(recordingBlob, `Recording-${Date.now()}`) : undefined}
             uploading={uploading}
+            scrollRecording={false}
+            onToggleScrollRecording={() => {}}
+            quality="auto"
+            onQualityChange={() => {}}
           />
         ) : (
           <div className="dashboard">
@@ -213,6 +255,24 @@ function App() {
           </div>
         )}
       </main>
+      {/* Toast notification */}
+      {showToast && (
+        <div className="toast-container">
+          <div className="toast-toast">
+            <div className="toast-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+            </div>
+            <div className="toast-content">
+              <span className="toast-title">Recording ready!</span>
+              <span className="toast-message">Your screen capture is ready to download or save.</span>
+            </div>
+            <button className="toast-close" onClick={() => setShowToast(false)}>×</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
