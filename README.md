@@ -1,32 +1,55 @@
-# React + TypeScript + Vite
+# Screen Recorder — Local & Private
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A browser-based screen recorder that runs entirely in your browser. No uploads, no accounts, no tracking. Download your recording as WebM.
 
-Currently, two official plugins are available:
+Built with React 19 + TypeScript + Vite. Zero external UI dependencies.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## What it does
 
-## React Compiler
+- Record your screen, a window, or a browser tab using the native MediaRecorder API
+- Pause and resume mid-recording
+- Preview playback after stopping
+- Download the recording as a WebM file
+- Everything stays on your device — nothing is uploaded
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Phase 2 (in progress)
 
-## Expanding the Oxlint configuration
+- Supabase Storage for cloud save (so recordings survive across devices)
+- Supabase Auth for per-user private storage
+- Dashboard listing your cloud recordings
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## Run locally
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Then open the URL printed by Vite (usually `http://localhost:5173`).
+
+## Build
+
+```bash
+npm run build
+```
+
+Produces `dist/` with an optimized static bundle (HTML + JS + CSS).
+
+## Tech
+
+- React 19 + TypeScript + Vite
+- Native MediaRecorder API (screen/window/tab capture via `getDisplayMedia`)
+- `@supabase/supabase-js` (Phase 2)
+- CSS custom properties for theming — no Tailwind, no CSS framework
+- Content-Security-Policy meta tag for security
+
+## Security
+
+- CSP: `default-src 'self'`, `frame-ancestors 'none'`, no external script/style sources
+- No cookies, no tracking, no analytics
+- Media stream tracks are released on unmount
+- Recording blobs are created in-memory and downloaded — nothing persists unless you save it
+
+## Author
+
+Built by Abdo — [electromenager.best](https://electromenager.best)

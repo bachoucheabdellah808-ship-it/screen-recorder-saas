@@ -202,6 +202,12 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
     const recorder = mediaRecorderRef.current;
     if (recorder && (recorder.state === 'recording' || recorder.state === 'paused')) {
       recorder.stop();
+      // Stop stream tracks so screen share ends immediately
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        setMediaStream(null);
+      }
       stopElapsedTimer();
       setIsRecording(false);
       setIsPaused(false);
@@ -236,6 +242,8 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
     }
     mediaRecorderRef.current = null;
     chunksRef.current = [];
+    setHasRecording(false);
+    setRecordingBlob(null);
   }, []);
 
   return {
